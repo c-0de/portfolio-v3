@@ -215,11 +215,6 @@ const BackgroundBots = ({ isHostile }) => {
                 const bobY = Math.sin(this.angle) * 5;
                 ctx.translate(0, bobY);
 
-                // Apply red tint when hostile (red eyes effect)
-                if (isHostile) {
-                    ctx.filter = 'hue-rotate(180deg) saturate(5) brightness(1.2)';
-                }
-
                 if (robotSprite) {
                     ctx.drawImage(robotSprite, -this.size / 2, -this.size / 2, this.size, this.size);
                 } else if (rawImg.complete && rawImg.naturalHeight !== 0) {
@@ -230,8 +225,14 @@ const BackgroundBots = ({ isHostile }) => {
                     ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
                 }
 
-                // Reset filter
-                ctx.filter = 'none';
+                // Add red overlay when hostile (red eyes effect) - preserves transparency
+                if (isHostile) {
+                    ctx.globalCompositeOperation = 'source-atop';
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+                    ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+                    ctx.globalCompositeOperation = 'source-over'; // Reset
+                }
+
                 ctx.restore();
             }
         }
