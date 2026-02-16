@@ -1,11 +1,13 @@
 import React from 'react';
 import GlitchText from './GlitchText';
 import Terminal from './Terminal';
+import robotImg from '../assets/robot.png';
 
 const Hero = () => {
     return (
-        <section id="hero" className="py-16 min-h-[80vh] flex justify-center items-center">
-            <div className="flex gap-16 items-center flex-wrap max-w-6xl w-full px-4 md:flex-row flex-col text-center md:text-left">
+        <section id="hero" className="py-16 min-h-[80vh] flex justify-center items-center relative overflow-hidden">
+
+            <div className="flex gap-16 items-center flex-wrap max-w-6xl w-full px-4 md:flex-row flex-col text-center md:text-left z-10">
 
                 {/* Profile Card */}
                 <div className="w-[300px] bg-black/60 border border-neon-cyan p-4 relative
@@ -33,7 +35,6 @@ const Hero = () => {
                     </div>
                 </div>
 
-                {/* Helper text for Tailwind classes: flex-1 takes remaining space */}
                 <div className="flex-1 max-w-[600px] w-full">
                     <div className="mb-8 block">
                         <GlitchText text="SYSTEM_OVERRIDE" as="h1" className="text-5xl md:text-6xl" />
