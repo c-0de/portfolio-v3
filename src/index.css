@@ -161,6 +161,7 @@
 /* Global resets and base styles */
 body {
   @apply bg-dark-bg text-neon-green font-body overflow-x-hidden leading-relaxed;
+  cursor: url('/cursor.svg') 32 32, auto;
 }
 
 ::-webkit-scrollbar {

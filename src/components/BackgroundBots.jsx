@@ -207,11 +207,18 @@ const BackgroundBots = ({ isHostile }) => {
             }
 
             draw(ctx) {
+                const isHostile = hostileRef.current;
+
                 ctx.save();
                 ctx.translate(this.x, this.y);
                 // Apply bobbing to the visuals, not physics origin
                 const bobY = Math.sin(this.angle) * 5;
                 ctx.translate(0, bobY);
+
+                // Apply red tint when hostile (red eyes effect)
+                if (isHostile) {
+                    ctx.filter = 'hue-rotate(180deg) saturate(5) brightness(1.2)';
+                }
 
                 if (robotSprite) {
                     ctx.drawImage(robotSprite, -this.size / 2, -this.size / 2, this.size, this.size);
@@ -222,6 +229,9 @@ const BackgroundBots = ({ isHostile }) => {
                     ctx.fillStyle = '#39ff14'; // Neon Green Fallback
                     ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
                 }
+
+                // Reset filter
+                ctx.filter = 'none';
                 ctx.restore();
             }
         }
