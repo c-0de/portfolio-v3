@@ -14,7 +14,7 @@ const SecurityPanel = ({ onIntrusionTrigger }) => {
             {!active && (
                 <button
                     onClick={handleClick}
-                    className="fixed bottom-8 left-8 z-50 group flex items-center gap-3 px-6 py-3 bg-red-900/20 border-2 border-red-600/50 hover:bg-red-900/80 hover:border-red-500 transition-all duration-300 backdrop-blur-sm cursor-pointer"
+                    className="fixed bottom-8 left-8 z-50 group flex items-center gap-3 px-6 py-3 bg-red-900/20 border-2 border-red-600/50 hover:bg-red-900/80 hover:border-red-500 transition-all duration-300 backdrop-blur-sm cursor-pointer animate-[pulse_3s_ease-in-out_infinite]"
                 >
                     <div className="text-3xl animate-pulse">💀</div>
                     <div className="flex flex-col items-start">
