@@ -1,10 +1,16 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import robotImgSrc from '../assets/robot.png';
 
-const BackgroundBots = ({ isHostile }) => {
+const MAX_HEALTH = 10;
+const HIT_RADIUS = 18; // px from cursor center to count as a hit
+
+const BackgroundBots = ({ isHostile, onPlayerDeath }) => {
     const canvasRef = useRef(null);
-    // Ref to track hostility inside the event loop without needing re-renders/dependency updates for the effect
     const hostileRef = useRef(isHostile);
+    // DOM refs for the death panel — controlled directly from the animation loop
+    const deathPanelRef = useRef(null);
+    const dotsRef = useRef(null);
+    const [showDeathPanel, setShowDeathPanel] = useState(false);
 
     useEffect(() => {
         hostileRef.current = isHostile;
@@ -23,6 +29,12 @@ const BackgroundBots = ({ isHostile }) => {
         let bullets = [];
         // Use a ref-like object for mouse to ensure it's shared
         const mouse = { x: -1000, y: -1000 };
+
+        // --- Player Health ---
+        let playerHealth = MAX_HEALTH;
+        let isDead = false;
+        let deathTimer = 0; // how long death screen has been shown
+        let hitFlash = 0;   // flash frames for damage feedback
 
         // Image processing: removing black background
         let robotSprite = null;
@@ -190,8 +202,8 @@ const BackgroundBots = ({ isHostile }) => {
                 this.angle += 0.05;
 
                 // --- 2. Firing Logic ---
-                // Only fire if INTRUSION DETECTED (Hostile Mode)
-                if (isHostile && mousePosition.x > -100) {
+                // Only fire if INTRUSION DETECTED (Hostile Mode) and player is alive
+                if (isHostile && mousePosition.x > -100 && !isDead) {
                     // Fire if close enough
                     if (dist < 800 && this.cooldown <= 0) { // Increased range for battle
                         this.fire(mousePosition);
@@ -237,12 +249,110 @@ const BackgroundBots = ({ isHostile }) => {
             }
         }
 
+        // --- Health Bar Rendering ---
+        const drawHealthBar = (cx, cy) => {
+            if (mouse.x < -100 || !hostileRef.current) return; // only in hostile mode and while cursor is on screen
+
+            const barWidth = 60;
+            const barHeight = 7;
+            const barX = cx - barWidth / 2;
+            const barY = cy - 38; // above cursor
+
+            const healthFrac = Math.max(0, playerHealth / MAX_HEALTH);
+
+            // Background track
+            ctx.save();
+            ctx.globalAlpha = 0.85;
+            ctx.beginPath();
+            ctx.roundRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2, 4);
+            ctx.fillStyle = '#111';
+            ctx.fill();
+
+            // Health fill — green → yellow → red based on fraction
+            let fillColor;
+            if (healthFrac > 0.5) {
+                fillColor = `hsl(${120 * healthFrac * 2}, 100%, 45%)`;
+            } else {
+                fillColor = `hsl(${120 * healthFrac}, 100%, 45%)`;
+            }
+
+            if (healthFrac > 0) {
+                ctx.beginPath();
+                ctx.roundRect(barX, barY, barWidth * healthFrac, barHeight, 3);
+                ctx.fillStyle = fillColor;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = fillColor;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // Border
+            ctx.beginPath();
+            ctx.roundRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2, 4);
+            ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // HP label — small text
+            ctx.font = 'bold 9px monospace';
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.textAlign = 'center';
+            ctx.fillText(`HP ${playerHealth}/${MAX_HEALTH}`, cx, barY - 4);
+
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        };
+
+        // NOTE: death screen is now a DOM overlay — drawDeathScreen removed from canvas
+
+        // --- Bullet-Cursor Collision ---
+        const checkBulletHits = () => {
+            if (isDead || mouse.x < -100 || !hostileRef.current) return;
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                const dx = b.x - mouse.x;
+                const dy = b.y - mouse.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < HIT_RADIUS) {
+                    bullets.splice(i, 1); // destroy bullet
+                    playerHealth = Math.max(0, playerHealth - 1);
+                    hitFlash = 12; // show flash for 12 frames
+                    if (playerHealth <= 0) {
+                        isDead = true;
+                        deathTimer = 0;
+                        setShowDeathPanel(true);
+                        // Notify parent — collapses intrusion overlay and returns bots to formation
+                        if (onPlayerDeath) onPlayerDeath();
+                    }
+                }
+            }
+        };
+
+        // --- Hit Flash Overlay ---
+        const drawHitFlash = () => {
+            if (hitFlash <= 0) return;
+            const alpha = (hitFlash / 12) * 0.35;
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#ff0033';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+            hitFlash--;
+        };
+
         // --- Logic ---
 
         const initBots = () => {
             // Reset arrays
             bots = [];
             bullets = [];
+
+            // Reset player state on resize
+            playerHealth = MAX_HEALTH;
+            isDead = false;
+            deathTimer = 0;
+            hitFlash = 0;
 
             const width = canvas.width;
             const height = canvas.height;
@@ -266,21 +376,56 @@ const BackgroundBots = ({ isHostile }) => {
             // Clear screen
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Update & Draw Bots
-            bots.forEach(bot => {
-                bot.update(canvas.width, canvas.height, mouse);
-                bot.draw(ctx);
-            });
+            if (isDead) {
+                // Bots keep drawing (they've returned to formation)
+                bots.forEach(bot => { bot.draw(ctx); });
 
-            // Update & Draw Bullets
-            // Iterate backwards to allow removal
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                const b = bullets[i];
-                b.update();
-                b.draw(ctx);
-                if (b.life <= 0) {
-                    bullets.splice(i, 1);
+                // Drive the DOM overlay opacity & dots from animation loop
+                if (deathPanelRef.current) {
+                    const fadeIn = Math.min(1, deathTimer / 30);
+                    deathPanelRef.current.style.opacity = fadeIn;
                 }
+                if (dotsRef.current) {
+                    const dots = Math.floor((deathTimer / 150) * 5);
+                    dotsRef.current.textContent = 'RESETTING' + '.'.repeat(dots + 1);
+                }
+
+                deathTimer++;
+
+                // ~2.5s then reset
+                if (deathTimer > 150) {
+                    isDead = false;
+                    playerHealth = MAX_HEALTH;
+                    deathTimer = 0;
+                    bullets = [];
+                    setShowDeathPanel(false);
+                }
+            } else {
+                // Update & Draw Bots
+                bots.forEach(bot => {
+                    bot.update(canvas.width, canvas.height, mouse);
+                    bot.draw(ctx);
+                });
+
+                // Check collisions BEFORE drawing bullets (so removed bullets don't flash)
+                checkBulletHits();
+
+                // Update & Draw Bullets
+                // Iterate backwards to allow removal
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    const b = bullets[i];
+                    b.update();
+                    b.draw(ctx);
+                    if (b.life <= 0) {
+                        bullets.splice(i, 1);
+                    }
+                }
+
+                // Draw hit flash overlay
+                drawHitFlash();
+
+                // Draw health bar above cursor
+                drawHealthBar(mouse.x, mouse.y);
             }
 
             animationFrameId = requestAnimationFrame(animate);
@@ -325,10 +470,91 @@ const BackgroundBots = ({ isHostile }) => {
     }, []);
 
     return (
-        <canvas
-            ref={canvasRef}
-            className="fixed top-0 left-0 w-full h-full pointer-events-none z-0 opacity-50"
-        />
+        <>
+            <canvas
+                ref={canvasRef}
+                className="fixed top-0 left-0 w-full h-full pointer-events-none z-0 opacity-50"
+            />
+
+            {/* THREAT NEUTRALIZED — DOM overlay so it's above all page content */}
+            {showDeathPanel && (
+                <div
+                    ref={deathPanelRef}
+                    style={{ opacity: 0, transition: 'none' }}
+                    className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
+                >
+                    <div style={{
+                        background: 'rgba(0,10,5,0.97)',
+                        border: '1.5px solid #00ff88',
+                        borderRadius: '6px',
+                        boxShadow: '0 0 40px #00ff88, 0 0 80px rgba(0,255,136,0.3)',
+                        padding: '0',
+                        width: 'min(520px, 85vw)',
+                        fontFamily: 'monospace',
+                        overflow: 'hidden',
+                    }}>
+                        {/* Top accent stripe */}
+                        <div style={{
+                            height: '2px',
+                            background: 'linear-gradient(to right, transparent, #00ff88 20%, #00ff88 80%, transparent)',
+                        }} />
+
+                        <div style={{ padding: '16px 20px 20px' }}>
+                            {/* Header */}
+                            <div style={{ fontSize: '11px', color: '#00ff88', fontWeight: 'bold', marginBottom: '10px' }}>
+                                // SYSTEM STATUS REPORT
+                            </div>
+
+                            {/* Divider */}
+                            <div style={{ height: '1px', background: 'rgba(0,255,136,0.2)', marginBottom: '16px' }} />
+
+                            {/* Checkmark */}
+                            <div style={{
+                                textAlign: 'center',
+                                fontSize: '34px',
+                                color: '#00ff88',
+                                textShadow: '0 0 20px #00ff88',
+                                marginBottom: '8px',
+                            }}>✓</div>
+
+                            {/* Title */}
+                            <div style={{
+                                textAlign: 'center',
+                                fontSize: '28px',
+                                fontWeight: 'bold',
+                                color: '#00ff88',
+                                textShadow: '0 0 15px #00ff88',
+                                letterSpacing: '2px',
+                                marginBottom: '10px',
+                            }}>THREAT NEUTRALIZED</div>
+
+                            {/* Subtitle */}
+                            <div style={{
+                                textAlign: 'center',
+                                fontSize: '12px',
+                                color: 'rgba(0,255,136,0.65)',
+                                letterSpacing: '1px',
+                                marginBottom: '14px',
+                            }}>ALL HOSTILE UNITS ELIMINATED — SYSTEMS NOMINAL</div>
+
+                            {/* Divider */}
+                            <div style={{ height: '1px', background: 'rgba(0,255,136,0.15)', marginBottom: '12px' }} />
+
+                            {/* Dots countdown */}
+                            <div
+                                ref={dotsRef}
+                                style={{
+                                    textAlign: 'center',
+                                    fontSize: '11px',
+                                    color: 'rgba(0,255,136,0.45)',
+                                    letterSpacing: '2px',
+                                }}
+                            >RESETTING.</div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 };
 

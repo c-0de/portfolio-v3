@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 
-const SecurityPanel = ({ onIntrusionTrigger }) => {
-    const [active, setActive] = useState(false);
+const SecurityPanel = ({ onIntrusionTrigger, active, setActive }) => {
 
     const handleClick = () => {
         setActive(true);

@@ -161,7 +161,13 @@
 /* Global resets and base styles */
 body {
   @apply bg-dark-bg text-neon-green font-body overflow-x-hidden leading-relaxed;
-  cursor: url('/cursor.svg') 32 32, auto;
+  cursor: auto;
+}
+
+/* Animated crosshair cursor — only active during intrusion/hostile mode */
+body.intrusion-active,
+body.intrusion-active * {
+  cursor: url('/cursor.svg') 32 32, crosshair !important;
 }
 
 ::-webkit-scrollbar {
